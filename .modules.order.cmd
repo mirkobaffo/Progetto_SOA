@@ -1,1 +1,1 @@
-cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/modules.order := {   echo /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleLoader.ko; :; } | awk '!x[$$0]++' - > /home/mirkobaffo/Scrivania/Progetto_SOA/modules.order
+cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/modules.order := {   echo /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.ko; :; } | awk '!x[$$0]++' - > /home/mirkobaffo/Scrivania/Progetto_SOA/modules.order
