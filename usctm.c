@@ -1,7 +1,3 @@
-/*
-* 
-*/
-
 #define EXPORT_SYMTAB
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -24,6 +20,7 @@
 #include <asm/apic.h>
 #include <linux/syscalls.h>
 #include "./include/vtpmo.h"
+#include "./lib/vtpmo.c"
 
 
 MODULE_LICENSE("GPL");
@@ -55,6 +52,9 @@ extern int sys_vtpmo(unsigned long vaddr);
 
 unsigned long *hacked_ni_syscall=NULL;
 unsigned long **hacked_syscall_tbl=NULL;
+
+//in questa variabile inserisco gli indirizzi delle sys_ni_syscall trovate nella tabella delle syscall
+unsigned long **ni_syscall_founded= NULL;
 
 unsigned long sys_call_table_address = 0x0;
 module_param(sys_call_table_address, ulong, 0660);
@@ -143,10 +143,45 @@ void syscall_table_finder(void){
 	
 }
 
+//vado a settare il numero della syscall table con ni_sys_call all'interno della prima entry libera del nostro array
+void fill_ni_syscall_founded(int i, int c){
+	int *temp;
+	if(ni_syscall_founded[c] == NULL){
+		printk("inserisco nel posto %d dell'array la posizione sys_ni_syscall %d ", c, i);
+		*temp = i;
+		ni_syscall_founded[c] = (unsigned long*)temp;
+	}
+	else{
+		printk("lo spazio %d è pieno, passo al successivo", c);
+		fill_ni_syscall_founded(i,c+1);
+	}
+}
+
+
 
 #define MAX_FREE 15
 int free_entries[MAX_FREE];
 module_param_array(free_entries,int,NULL,0660);//default array size already known - here we expose what entries are free
+
+int syscall_number_finder(void){
+	int i,j;
+	syscall_table_finder();
+	if(!hacked_syscall_tbl){
+		printk("%s: failed to find the sys_call_table\n",MODNAME);
+		return -1;
+	}
+
+	j=0;
+	for(i=0;i<ENTRIES_TO_EXPLORE;i++)
+		if(hacked_syscall_tbl[i] == hacked_ni_syscall){
+			printk("%s: found sys_ni_syscall entry at syscall_table[%d]\n",MODNAME,i);	
+			free_entries[j++] = i;
+			fill_ni_syscall_founded(i,0);
+			if(j>=MAX_FREE) break;
+		}
+		return 0;
+
+}
 
 
 #define SYS_CALL_INSTALL
@@ -198,8 +233,15 @@ unprotect_memory(void)
 #endif
 
 
+int init_module(void) {	
+        printk("%s: initializing\n",MODNAME);
+	syscall_table_finder();
+	syscall_number_finder();
+	return 0;
+}
 
-int init_module(void) {
+
+int init_module2(void) {
 	
 	int i,j;
 		
