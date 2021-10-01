@@ -22,7 +22,6 @@
 #include "./include/vtpmo.h"
 #include "./lib/vtpmo.c"
 
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Mirko Leandri");
 MODULE_DESCRIPTION("USCTM");
@@ -36,7 +35,7 @@ extern int sys_vtpmo(unsigned long vaddr);
 
 
 #define ADDRESS_MASK 0xfffffffffffff000//to migrate
-
+#define REQUIRED_SYS_NI_SYSCALL  4 //numero di spazi necessari per allocare syscall di cui necessitiamo
 #define START 			0xffffffff00000000ULL		// use this as starting address --> this is a biased search since does not start from 0xffff000000000000
 #define MAX_ADDR		0xfffffffffff00000ULL
 #define FIRST_NI_SYSCALL	134
@@ -54,7 +53,7 @@ unsigned long *hacked_ni_syscall=NULL;
 unsigned long **hacked_syscall_tbl=NULL;
 
 //in questa variabile inserisco gli indirizzi delle sys_ni_syscall trovate nella tabella delle syscall
-unsigned long **ni_syscall_founded= NULL;
+unsigned long *ni_syscall_founded = NULL;
 
 unsigned long sys_call_table_address = 0x0;
 module_param(sys_call_table_address, ulong, 0660);
@@ -144,17 +143,24 @@ void syscall_table_finder(void){
 }
 
 //vado a settare il numero della syscall table con ni_sys_call all'interno della prima entry libera del nostro array
-void fill_ni_syscall_founded(int i, int c){
-	int *temp;
+int fill_ni_syscall_founded(int i, int c){
+    int *temp;
+    int k;
 	if(ni_syscall_founded[c] == NULL){
 		printk("inserisco nel posto %d dell'array la posizione sys_ni_syscall %d ", c, i);
-		*temp = i;
+		temp = i;
 		ni_syscall_founded[c] = (unsigned long*)temp;
-	}
+        for(k = 0; k < c; k ++){
+            printk("ecco le entry: %lu", ni_syscall_founded[k]);
+        }
+    }
 	else{
 		printk("lo spazio %d è pieno, passo al successivo", c);
+        //questa funzione ricorsiva in ambito di sicurezza non va bene quindi va tolta (anche no)
 		fill_ni_syscall_founded(i,c+1);
 	}
+    return 0;
+
 }
 
 
@@ -164,7 +170,8 @@ int free_entries[MAX_FREE];
 module_param_array(free_entries,int,NULL,0660);//default array size already known - here we expose what entries are free
 
 int syscall_number_finder(void){
-	int i,j;
+	int i,j,counter;
+    counter = 0;
 	syscall_table_finder();
 	if(!hacked_syscall_tbl){
 		printk("%s: failed to find the sys_call_table\n",MODNAME);
@@ -176,7 +183,12 @@ int syscall_number_finder(void){
 		if(hacked_syscall_tbl[i] == hacked_ni_syscall){
 			printk("%s: found sys_ni_syscall entry at syscall_table[%d]\n",MODNAME,i);	
 			free_entries[j++] = i;
-			fill_ni_syscall_founded(i,0);
+            if(counter == REQUIRED_SYS_NI_SYSCALL){
+                printk("la tabella è piena\n");
+                return 0;
+            }
+            fill_ni_syscall_founded(i,0);
+            counter = counter +1;
 			if(j>=MAX_FREE) break;
 		}
 		return 0;
@@ -188,19 +200,42 @@ int syscall_number_finder(void){
 
 #ifdef SYS_CALL_INSTALL
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(2, _trial, unsigned long, A, unsigned long, B){
+__SYSCALL_DEFINEx(1, _prova, unsigned long, A){
 #else
-asmlinkage long sys_trial(unsigned long A, unsigned long B){
+asmlinkage long sys_prova(unsigned long A){
 #endif
 
-        printk("%s: thread %d requests a trial sys_call with %lu and %lu as parameters\n",MODNAME,current->pid,A,B);
+        printk("%s: bravo mirko hai inserito la tua prima syscall di parametro %lu daniele sei no scemo\n",MODNAME,A);
 
         return 0;
 
 }
 
+
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_trial = (unsigned long) __x64_sys_trial;	
+static unsigned long sys_prova = (unsigned long) __x64_sys_prova;
+#else
+#endif
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+__SYSCALL_DEFINEx(2, _seconda, int, A, int, B){
+#else
+asmlinkage long sys_seconda(int A, int B){
+#endif
+
+    int c = A + B;
+    printk("%s: bravo mirko hai inserito la tua seconda syscall che riesce anche a fare una somma in particolare dice che %d + %d fa %d\n",MODNAME,A, B, c);
+
+    return 0;
+
+}
+
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+static unsigned long sys_seconda = (unsigned long) __x64_sys_seconda;
 #else
 #endif
 
@@ -233,41 +268,26 @@ unprotect_memory(void)
 #endif
 
 
-int init_module(void) {	
+int init_module2(void) {
         printk("%s: initializing\n",MODNAME);
-	syscall_table_finder();
-	syscall_number_finder();
+
 	return 0;
 }
 
 
-int init_module2(void) {
-	
-	int i,j;
-		
-        printk("%s: initializing\n",MODNAME);
-	
-	syscall_table_finder();
-
-	if(!hacked_syscall_tbl){
-		printk("%s: failed to find the sys_call_table\n",MODNAME);
-		return -1;
-	}
-
-	j=0;
-	for(i=0;i<ENTRIES_TO_EXPLORE;i++)
-		if(hacked_syscall_tbl[i] == hacked_ni_syscall){
-			printk("%s: found sys_ni_syscall entry at syscall_table[%d]\n",MODNAME,i);	
-			free_entries[j++] = i;
-			if(j>=MAX_FREE) break;
-		}
+int init_module(void) {
+    printk("%s: initializing\n",MODNAME);
+    ni_syscall_founded = kmalloc(sizeof(unsigned long) * REQUIRED_SYS_NI_SYSCALL, GFP_KERNEL);
+    syscall_number_finder();
 
 #ifdef SYS_CALL_INSTALL
 	cr0 = read_cr0();
         unprotect_memory();
-        hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)sys_trial;
-        protect_memory();
-	printk("%s: a sys_call with 2 parameters has been installed as a trial on the sys_call_table at displacement %d\n",MODNAME,FIRST_NI_SYSCALL);	
+        hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)sys_prova;
+        hacked_syscall_tbl[ni_syscall_founded[1]] = (unsigned long*)sys_seconda;
+
+    protect_memory();
+	printk("%s: 2 sys_call with 1 parameters has been installed as a trial on the sys_call_table at displacement %d e %lu\n",MODNAME,FIRST_NI_SYSCALL, ni_syscall_founded[1]);
 #else
 #endif
 
@@ -283,7 +303,10 @@ void cleanup_module(void) {
 	cr0 = read_cr0();
         unprotect_memory();
         hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
-        protect_memory();
+        printk("sto impostando ni_syscall nella posizione %d", FIRST_NI_SYSCALL);
+        hacked_syscall_tbl[ni_syscall_founded[1]] = (unsigned long*)sys_seconda;
+        printk("sto impostando ni_syscall nella posizione %lu", ni_syscall_founded[1]);
+    protect_memory();
 #else
 #endif
         printk("%s: shutting down\n",MODNAME);
