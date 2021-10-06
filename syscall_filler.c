@@ -21,14 +21,15 @@
 #include <linux/syscalls.h>
 #include "./include/vtpmo.h"
 #include "./lib/vtpmo.c"
+#include "data_structures.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Mirko Leandri");
-MODULE_DESCRIPTION("USCTM");
+MODULE_DESCRIPTION("syscall_filler");
 
 
 
-#define MODNAME "USCTM"
+#define MODNAME "syscall_filler"
 
 
 extern int sys_vtpmo(unsigned long vaddr);
@@ -205,8 +206,7 @@ __SYSCALL_DEFINEx(1, _prova, unsigned long, A){
 asmlinkage long sys_prova(unsigned long A){
 #endif
 
-        printk("%s: bravo mirko hai inserito la tua prima syscall di parametro %lu daniele sei no scemo\n",MODNAME,A);
-
+        printk("%s: bravo Daniele hai inserito la tua prima syscall di parametro %lu\n",MODNAME,A);
         return 0;
 
 }
@@ -225,8 +225,11 @@ __SYSCALL_DEFINEx(2, _seconda, int, A, int, B){
 asmlinkage long sys_seconda(int A, int B){
 #endif
 
-    int c = A + B;
-    printk("%s: bravo mirko hai inserito la tua seconda syscall che riesce anche a fare una somma in particolare dice che %d + %d fa %d\n",MODNAME,A, B, c);
+    printk("ciao");
+    struct tag tag1;
+    tag1.key = A;
+    tag1.command = 10;
+    printk("%s: bravo mirko hai inserito la tua seconda syscall che crea un tag con key pari a %d\n",MODNAME,tag1.key);
 
     return 0;
 
@@ -267,14 +270,6 @@ unprotect_memory(void)
 #else
 #endif
 
-
-int init_module2(void) {
-        printk("%s: initializing\n",MODNAME);
-
-	return 0;
-}
-
-
 int init_module(void) {
     printk("%s: initializing\n",MODNAME);
     ni_syscall_founded = kmalloc(sizeof(unsigned long) * REQUIRED_SYS_NI_SYSCALL, GFP_KERNEL);
@@ -303,9 +298,10 @@ void cleanup_module(void) {
 	cr0 = read_cr0();
         unprotect_memory();
         hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
-        printk("sto impostando ni_syscall nella posizione %d", FIRST_NI_SYSCALL);
+        printk("sto impostando ni_syscall nella posizione %d questa corrisponderà al comando di crete_tag", FIRST_NI_SYSCALL);
         hacked_syscall_tbl[ni_syscall_founded[1]] = (unsigned long*)sys_seconda;
         printk("sto impostando ni_syscall nella posizione %lu", ni_syscall_founded[1]);
+        
     protect_memory();
 #else
 #endif

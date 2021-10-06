@@ -1,4 +1,4 @@
-obj-m += usctm.o 
+obj-m += syscall_filler.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
@@ -7,7 +7,7 @@ clean:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 	
 mount:
-	sudo insmod usctm.ko
+	sudo insmod syscall_filler.ko
 	
 remove:
-	sudo rmmod usctm.ko 
+	sudo rmmod syscall_filler.ko
