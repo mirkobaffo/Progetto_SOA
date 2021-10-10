@@ -196,43 +196,43 @@ int syscall_number_finder(void){
 
 }
 
-
+//Qui sto inserendo le mie system call nuove, il cui frontend verrà implementato in un altro file
 #define SYS_CALL_INSTALL
 
 #ifdef SYS_CALL_INSTALL
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(1, _prova, unsigned long, A){
+__SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission){
 #else
-asmlinkage long sys_prova(unsigned long A){
+asmlinkage int sys_tag_get(int key, int command, int permission){
 #endif
-
-        printk("%s: bravo Daniele hai inserito la tua prima syscall di parametro %lu\n",MODNAME,A);
-        return 0;
+     return tag_get(key,command,permission);
 
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+__SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char *, buffer, size_t, size ){
+#else
+asmlinkage int sys_tag_send(int tag, int level, char * buffer, size_t size){
+#endif
+    return tag_send(tag,level,buffer, size);
 
+}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_prova = (unsigned long) __x64_sys_prova;
+__SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char *, buffer, size_t, size ){
 #else
+asmlinkage int sys_tag_receive(int tag, int level, char * buffer, size_t size){
 #endif
+    return tag_receive(tag,level,buffer,size);
 
+}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(2, _seconda, int, A, int, B){
+__SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command){
 #else
-asmlinkage long sys_seconda(int A, int B){
+asmlinkage int sys_tag_get(int tag, int command){
 #endif
-
-    printk("ciao");
-    struct tag tag1;
-    tag1.key = A;
-    tag1.command = 10;
-    printk("%s: bravo mirko hai inserito la tua seconda syscall che crea un tag con key pari a %d\n",MODNAME,tag1.key);
-
-    return 0;
-
+    return tag_ctl(tag,command);
 }
 
 
@@ -278,11 +278,14 @@ int init_module(void) {
 #ifdef SYS_CALL_INSTALL
 	cr0 = read_cr0();
         unprotect_memory();
-        hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)sys_prova;
-        hacked_syscall_tbl[ni_syscall_founded[1]] = (unsigned long*)sys_seconda;
+        hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)sys_tag_get;
+        hacked_syscall_tbl[SECOND_NI_SYSCALL] = (unsigned long*)sys_tag_send;
+        hacked_syscall_tbl[THIRD_NI_SYSCALL] = (unsigned long*)sys_tag_receive;
+        hacked_syscall_tbl[FOURTH_NI_SYSCALL] = (unsigned long*)sys_tag_ctl;
+
 
     protect_memory();
-	printk("%s: 2 sys_call with 1 parameters has been installed as a trial on the sys_call_table at displacement %d e %lu\n",MODNAME,FIRST_NI_SYSCALL, ni_syscall_founded[1]);
+	printk("%s: Ho inserito le mie 4 nuove syscall nelle entry della sys call table: %d, %d, %d, %d \n",MODNAME,FIRST_NI_SYSCALL, SECOND_NI_SYSCALL, THIRD_NI_SYSCALL, FOURTH_NI_SYSCALL);
 #else
 #endif
 
@@ -291,18 +294,23 @@ int init_module(void) {
         return 0;
 
 }
-
+//Quando smonto il modulo mi assicuro di rimettere nella loro posizione le entry corrispondenti a ni_syscall per avere la possibilità di rieseguire il tutto una seconda volta senza problemi e senza dover riavviare la macchina virtuale
 void cleanup_module(void) {
                 
 #ifdef SYS_CALL_INSTALL
-	cr0 = read_cr0();
+	    cr0 = read_cr0();
         unprotect_memory();
+        //qui libero l'area di memoria che mi riempie le dinamicamente questo array con le entry ni_syscall che per ora resta inutilizzata
+        kfree(ni_syscall_founded);
         hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
-        printk("sto impostando ni_syscall nella posizione %d questa corrisponderà al comando di crete_tag", FIRST_NI_SYSCALL);
-        hacked_syscall_tbl[ni_syscall_founded[1]] = (unsigned long*)sys_seconda;
-        printk("sto impostando ni_syscall nella posizione %lu", ni_syscall_founded[1]);
-        
-    protect_memory();
+        printk("resetto la entry della syscall table numero %d", FIRST_NI_SYSCALL);
+        hacked_syscall_tbl[SECOND_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
+        printk("resetto la entry della syscall table numero %d", SECOND_NI_SYSCALL);
+        hacked_syscall_tbl[THIRD_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
+        printk("resetto la entry della syscall table numero %d", THIRD_NI_SYSCALL);
+        hacked_syscall_tbl[FOURTH_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
+        printk("resetto la entry della syscall table numero %d", FOURTH_NI_SYSCALL);
+        protect_memory();
 #else
 #endif
         printk("%s: shutting down\n",MODNAME);
