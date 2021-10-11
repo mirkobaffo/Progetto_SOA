@@ -21,6 +21,7 @@
 #include <linux/syscalls.h>
 #include "./include/vtpmo.h"
 #include "./lib/vtpmo.c"
+#include "services.c"
 #include "data_structures.h"
 
 MODULE_LICENSE("GPL");
@@ -236,12 +237,6 @@ asmlinkage int sys_tag_get(int tag, int command){
 }
 
 
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_seconda = (unsigned long) __x64_sys_seconda;
-#else
-#endif
-
 unsigned long cr0;
 
 static inline void
@@ -269,6 +264,16 @@ unprotect_memory(void)
 
 #else
 #endif
+
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
+static unsigned long sys_tag_send = (unsigned long) __x64_sys_tag_send;
+static unsigned long sys_tag_receive = (unsigned long) __x64_sys_tag_receive;
+static unsigned long sys_tag_ctl = (unsigned long) __x64_sys_tag_ctl;
+#else
+#endif
+
 
 int init_module(void) {
     printk("%s: initializing\n",MODNAME);
