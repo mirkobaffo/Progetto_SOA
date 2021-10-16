@@ -6,10 +6,13 @@
 #include <linux/kernel.h>
 #include "data_structures.h"
 #include <linux/unistd.h>
+#include <linux/spinlock.h>
 
 
 //possibilità di fare una lista collegata per ora accantonata
 struct tag *TAG_list = NULL;
+struct level *level_list = NULL;
+spinlock_t lock;
 
 int tag_get(int key, int command, int permission){
     TAG_list = kmalloc(sizeof(struct tag)*MAX_TAG_NUMBER,GFP_KERNEL);
@@ -17,6 +20,7 @@ int tag_get(int key, int command, int permission){
         printk("errore nell'assegnazione dell'area di memoria dedicata ai tag");
         return -1;
     }
+
     int i;
     //devo implementare la parte che riguarda la key IPC_PRIVATE
     //if(key == IPC_PRIVATE){
@@ -39,10 +43,23 @@ int tag_get(int key, int command, int permission){
                 my_tag.tag_id = i;
                 TAG_list[i] = my_tag;
                 printk("Hai creato un nuovo tag nella posizione %d", i);
+                //ora creo la serie di livelli associati al tag di riferimento
+                level_list = kmalloc(sizeof(struct level) * LEVELS, GFP_KERNEL);
+                if (level_list == NULL) {
+                    printk("errore nell'assegnazione dell'area di memoria dedicata ai livelli per il tag: %d", i);
+                    return -1;
+                }
+                TAG_list[i].structlevels = &level_list;
+                int lvl;
+                //adesso assegno ad ogni livello il tag e il proprio livello appunto
+                for(lvl = 0; lvl< LEVELS; lvl ++){
+                    level_list[lvl].tag = i;
+                    level_list[lvl].lvl=lvl;
+                }
+                }
                 //il valore che rappresenta il tag nell'array sarà il descrittore univoco del tag
                 return i;
             }
-            printk("ao");
             if (i == MAX_TAG_NUMBER) {
                 printk("hai raggiunto il limite di tag che è possibile creare");
                 return -1;
@@ -75,12 +92,18 @@ int tag_send(int tag, int level, char *buffer, size_t size){
         printk("non puoi utilizzare questo tag, solo il thread proprietario puo %d", tag);
         return -1;
     } */
-    //dove dobbiamo appoggiare questo buffer?
-    //probabilmente va inserito nel livello, come capire quale livello?
+    spin_lock(&lock);
+    //controllo se c'è almeno un thread in attesa altrimenti butto il messaggio
+    //QUESTA FUNZIONE VA SCRITTA (IN UN ALTRO FILE MAGARI)
+    if(search_wait_thread()) {
+        copy_from_user(TAG_list[tag].structlevels[level].buf, buffer, size);
+    }
+    spin_unlock(&lock);
     return 0;
 }
 
 int tag_receive(int tag, int level, char *buffer, size_t size) {
+    //da capire come ipmlementare un thread in attesa di un messaggio
     return 0;
 }
 
