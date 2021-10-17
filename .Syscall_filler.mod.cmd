@@ -1,0 +1,1 @@
+cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/Syscall_filler.mod := { echo  /home/mirkobaffo/Scrivania/Progetto_SOA/Syscall_filler.o;  echo; } > /home/mirkobaffo/Scrivania/Progetto_SOA/Syscall_filler.mod
