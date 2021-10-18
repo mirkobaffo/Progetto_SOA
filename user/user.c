@@ -6,6 +6,7 @@ int main(int argc, char *argv[]){
     int command;
     printf("Scegli quale servizio vuoi utilizzare: \n \n \n");
     scanf("%d",&command);
+    //CHIEDERE ALL'UTENTE DI METTERE UNA CHIAVE DA 0 A 255, CON 8 COME IPC PRIVATE
     printf("questa è la tua scelta: %d \n", command);
     char *s = malloc(256);
     if(s == NULL){

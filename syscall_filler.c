@@ -231,7 +231,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char * buffer, size_t size){
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 __SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command){
 #else
-asmlinkage int sys_tag_get(int tag, int command){
+asmlinkage int sys_tag_ctl(int tag, int command){
 #endif
     return tag_ctl(tag,command);
 }
