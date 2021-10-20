@@ -17,6 +17,14 @@ int search_for_level(struct tag TAG_list){
             return -1;
         }
     }
-}
     return 0;
-};
+}
+
+
+int delete_tag(struct tag TAG){
+    TAG.exist = 0;
+    TAG.structlevels = NULL;
+    TAG.key = NULL;
+    TAG.opened = NULL;
+    TAG.tag_id = NULL;
+}

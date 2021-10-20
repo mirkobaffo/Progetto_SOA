@@ -9,6 +9,8 @@
 #include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
+#include "util_tag.c"
+
 
 
 //possibilità di fare una lista collegata per ora accantonata
@@ -19,26 +21,24 @@ spinlock_t lock;
 
 int tag_get(int key, int command, int permission){
     //Controllo se è gia istanziata quell'area di memoria, se è la prima volta che chiamo questa call o se è stata fatta gia la free, verrà reistanziata
-    if(TAG_list_list == NULL){
+    if(TAG_list == NULL){
       TAG_list = kmalloc(sizeof(struct tag)*MAX_TAG_NUMBER,GFP_KERNEL);
       if(TAG_list == NULL){
         printk("errore nell'assegnazione dell'area di memoria dedicata ai tag");
         return -1;
       }
     int i;
-    //devo implementare la parte che riguarda la key IPC_PRIVATE
-    if(key == IPC_PRIVATE){
-        my_tag.private = 0;
-    }
     if(command == 1) {
         //in questo caso devo creare un nuovo tag
         struct tag my_tag;
         my_tag.exist = 1;
         my_tag.permission = permission;
-        //controllare se ci restituisce null pointer
+        //Qui forse ci mettiamo un bel SEMAFORO
         if (TAG_list[key].exist != 1) {
-            //probabilmente qua ci devo mettere un semaforo
             my_tag.tag_id = key;
+            if (key == IPC_PRIVATE) {
+                my_tag.private = 0;
+            }
             TAG_list[key] = my_tag;
             my_tag.opened = 1;
             printk("Hai creato un nuovo tag nella posizione %d", key);
@@ -48,31 +48,27 @@ int tag_get(int key, int command, int permission){
                 printk("errore nell'assegnazione dell'area di memoria dedicata ai livelli per il tag: %d", i);
                 return -1;
             }
-            TAG_list[key].structlevels = &level_list;
+            TAG_list[key].structlevels = level_list;
             int lvl;
             //adesso assegno ad ogni livello il tag e il proprio livello appunto
-            for(lvl = 0; lvl< LEVELS; lvl ++){
+            for (lvl = 0; lvl < LEVELS; lvl++) {
                 level_list[lvl].tag = key;
-                level_list[lvl].lvl=lvl;
+                level_list[lvl].lvl = lvl;
             }
-        }
-        else{
+        } else {
             printk("il tag selezionato gia esiste\n");
             return -1;
         }
         return key;
+        if (key >= MAX_TAG_NUMBER) {
+            printk("Inserire una key tra 0 e 255");
+            return -1;
+        }
     }
-    if (key >= MAX_TAG_NUMBER) {
-        printk("Inserire una key tra 0 e 255");
-        return -1;
-    }
-    }
-
-
     else if (command == 2){
         //in questo caso devo aprire un tag esistente, che vuol dire di preciso aprire un tag esistente?
         if(TAG_list[key].exist==1) {
-            if (key == 8) {
+            if (key == IPC_PRIVATE) {
                 printk("questo tag è stato creato come IPC_PRIVATE e non può essere riaperto\n");
                 return -1;
             }
@@ -109,8 +105,9 @@ int tag_send(int tag, int level, char *buffer, size_t size){
     int ret;
     //controllo se c'è almeno un thread in attesa altrimenti butto il messaggio
     //QUESTA FUNZIONE VA SCRITTA (IN UN ALTRO FILE MAGARI)
-    if(search_wait_thread()) {
-        ret = copy_from_user(TAG_list[tag].structlevels[level].buf, buffer, size);
+    //scrivere search_wait_thread()
+    if(true) {
+        ret = copy_from_user(TAG_list[tag].structlevels[level].bufs, buffer, size);
         if(ret < 0){
             printk("errore nella copy from user");
             return -1;
@@ -122,16 +119,16 @@ int tag_send(int tag, int level, char *buffer, size_t size){
 
 int tag_receive(int tag, int level, char *buffer, size_t size) {
     if(!TAG_list[tag].structlevels[level].is_empty){
-        spin_lock(&lock)
+        spin_lock(&lock);
         int ret;
-        ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].buf,min(size,MSG_MAX_SIZE);
+        ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].bufs,min(size,MSG_MAX_SIZE));
         if(ret < 0){
             spin_unlock(&lock);
             printk("errore nella copy to user");
             return -1;
         }
         spin_unlock(&lock);
-        return 0;
+        //return 0;
     }
 
     //da capire come ipmlementare un thread in attesa di un messaggio
@@ -154,10 +151,10 @@ int tag_ctl(int tag, int command) {
         }
         //ricordiamoci di segnare che il livello è vuoto dopo la receive
         if(search_for_level(TAG_list[key])){
-            TAG_list[key] == NULL;
+            delete_tag(TAG_list[key]);
         }
         else{
-            pritnk("non si può chiudere il tag\n");
+            printk("non si può chiudere il tag\n");
         }
     }
     return 0;
