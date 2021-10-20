@@ -1,1 +1,0 @@
-cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.mod := { echo  /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.o;  echo; } > /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.mod

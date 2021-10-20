@@ -1,1 +1,0 @@
-cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/syscall_table_discoverer.mod := { echo  /home/mirkobaffo/Scrivania/Progetto_SOA/syscall_table_discoverer.o;  echo; } > /home/mirkobaffo/Scrivania/Progetto_SOA/syscall_table_discoverer.mod

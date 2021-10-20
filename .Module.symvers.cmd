@@ -1,1 +1,0 @@
-cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/Module.symvers := sed 's/ko$$/o/' /home/mirkobaffo/Scrivania/Progetto_SOA/modules.order | scripts/mod/modpost -m -a   -o /home/mirkobaffo/Scrivania/Progetto_SOA/Module.symvers -e -i Module.symvers   -T -

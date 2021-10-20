@@ -1,1 +1,0 @@
-cmd_/home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.ko := ld -r -m elf_x86_64 --build-id=sha1  -T scripts/module.lds -o /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.ko /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.o /home/mirkobaffo/Scrivania/Progetto_SOA/ModuleManagement.mod.o;  true
