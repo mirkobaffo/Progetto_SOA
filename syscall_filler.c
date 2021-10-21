@@ -1,7 +1,7 @@
 #define EXPORT_SYMTAB
-#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/module.h>
 #include <linux/cdev.h>
 #include <linux/errno.h>
 #include <linux/device.h>
@@ -307,6 +307,8 @@ void cleanup_module(void) {
         unprotect_memory();
         //qui libero l'area di memoria che mi riempie le dinamicamente questo array con le entry ni_syscall che per ora resta inutilizzata
         kfree(ni_syscall_founded);
+        kfree(TAG_list);
+        kfree(level_list);
         hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
         printk("resetto la entry della syscall table numero %d", FIRST_NI_SYSCALL);
         hacked_syscall_tbl[SECOND_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
@@ -316,6 +318,7 @@ void cleanup_module(void) {
         hacked_syscall_tbl[FOURTH_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
         printk("resetto la entry della syscall table numero %d", FOURTH_NI_SYSCALL);
         protect_memory();
+
 #else
 #endif
         printk("%s: shutting down\n",MODNAME);

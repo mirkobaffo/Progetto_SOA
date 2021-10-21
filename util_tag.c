@@ -21,7 +21,7 @@ int search_for_level(struct tag TAG_list){
 }
 
 
-int delete_tag(struct tag TAG){
+void delete_tag(struct tag TAG){
     TAG.exist = 0;
     TAG.structlevels = NULL;
     TAG.key = NULL;
