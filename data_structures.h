@@ -30,11 +30,17 @@ struct level{
     int lvl;
     //descrittore univoco con il TAG proprietario del livello
     int tag;
-    //se è vuoto rimane in attesa fino all'arrivo del segnale o se si riempie;
     int is_empty;
     int is_queued;
     wait_queue_head_t wq;
     int reader;
+};
+
+//questa struttura viene usata dal device driver per tenere traccia dei tag con readers in attesa
+struct dev_struct{
+    int tag;
+    int thread;
+    int sleepers;
 };
 
 #endif //PROGETTO_SOA_DATA_STRUCTURES_H
