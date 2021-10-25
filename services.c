@@ -9,8 +9,10 @@
 #include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
-#include "util_tag.c"
 #include <linux/sched.h>
+#include "util_tag.c"
+
+
 
 
 
@@ -18,7 +20,9 @@
 struct tag *TAG_list = NULL;
 struct level *level_list = NULL;
 spinlock_t lock;
+spinlock_t level_lock;
 spinlock_t tag_lock;
+int signal_on = 0;
 //poteva essermi utile tenere la conta dei tag aperti per migliorare le prestazioni sul driver
 int total_tag = 0;
 
@@ -64,7 +68,7 @@ int tag_get(int key, int command, int permission){
                 level_list[lvl].is_empty = 0;
             }
             TAG_list[key].structlevels = level_list;
-            spin_unlock(&my_tag)
+            spin_unlock(&tag_lock);
             printk("ho inserito i livelli: %d", lvl);
         }
         else {
@@ -120,7 +124,7 @@ int tag_send(int tag, int level, char *buffer, size_t size){
     int ret;
     if(TAG_list[tag].structlevels[level].reader < 1){
         printk("nessuno aspetta il messaggio nel livello %d, del tag %d, il messaggio è stato scartato", level,tag);
-        spin_unlock(&lock)
+        spin_unlock(&lock);
         return -1;
     }
     if(true) {
@@ -138,20 +142,31 @@ int tag_send(int tag, int level, char *buffer, size_t size){
 int tag_receive(int tag, int level, char *buffer, size_t size) {
         int wait;
         //aumento il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
+        spin_lock(&level_lock);
         TAG_list[tag].structlevels[level].reader ++;
         TAG_list[tag].structlevels[level].is_queued = 1;
-        wait = wait_event_interruptible(TAG_list[tag].structlevels[level].wq, TAG_list[tag].structlevels[level].is_empty == 0 );
+        spin_unlock(&level_lock);
+        wait = wait_event_interruptible(TAG_list[tag].structlevels[level].wq, TAG_list[tag].structlevels[level].is_empty == 0 || signal_on == 1);
         if(wait < 0){
             printk("errore nella wait_event_interruptible\n");
             return -1;
         }
+        if(wait == -ERESTARTSYS){
+            printk("Ricevuto un segnale, fallito nell'attesa del messaggio\n");
+            TAG_list[tag].structlevels[level].reader --;
+            TAG_list[tag].structlevels[level].is_queued = 0;
+            return -1;
+        }
+        signal_on = 0;
         if(wait == 0){
             printk("il thread %d è stato messo in attesa di messaggi\n", current);
             //Qua mettere sincro della RCU
             rcu_read_lock();
             //diminuisco il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
+            spin_lock(&level_lock);
             TAG_list[tag].structlevels[level].reader --;
             TAG_list[tag].structlevels[level].is_queued = 0;
+            spin_unlock(&level_lock);
             int ret;
             ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].bufs,min(size,MSG_MAX_SIZE));
             if(ret < 0){
@@ -160,11 +175,13 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
                 return -1;
             }
             //reinserisco il buf del livello come vuoto
+            spin_lock(&level_lock);
             TAG_list[tag].structlevels[level].is_empty = 0;
-            if(reader < 1){
+            spin_unlock(&level_lock);
+            if(TAG_list[tag].structlevels[level].reader < 1){
                 //cancello il messaggio dopo che tutti lo hanno letto
                 kfree(TAG_list[tag].structlevels[level].bufs);
-                TAG_list[tag].structlevels[level].bufs = NULL;
+                *TAG_list[tag].structlevels[level].bufs = NULL;
             }
             rcu_read_unlock();
         }
@@ -176,24 +193,24 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
 int tag_ctl(int tag, int command) {
     if(command == 1){
         char *s;
-        s = kmalloc(sizeof(char) * 17);
+        s = kmalloc(sizeof(char) * 17,GFP_KERNEL);
         if(s == NULL){
             printk("errore nella kmalloc dell'awake_all");
             return -1;
         }
         s = "AWAKE ALL THREADS";
         int i,j;
-        for(i = 0, i< MAX_TAG_NUMBER, i++){
+        for(i = 0; i< MAX_TAG_NUMBER; i++){
             if(TAG_list[i].exist){
                 for(j = 0; j < LEVELS; j++){
-                    if(TAG_list[tag].structlevels[level].is_queued = 1){
-                        TAG_list[tag].structlevels[level].bufs = s;
+                    if(TAG_list[i].structlevels[j].is_queued = 1){
+                        *TAG_list[i].structlevels[j].bufs = s;
+                        //awake all
+                        wake_up_interruptible(&TAG_list[i].structlevels[j].wq);
                     }
                 }
             }
         }
-        wake_up_interruptible(TAG_list[tag].structlevels[level].wq);
-        //awake all, serve il device driver
     }
     else if (command == 2){
         if(tag < 0 || tag > MAX_TAG_NUMBER){
@@ -215,4 +232,10 @@ int tag_ctl(int tag, int command) {
     return 0;
 
 }
+
+
+void handler(int signal){
+    signal_on = 1;
+}
+
 

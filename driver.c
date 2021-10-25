@@ -11,8 +11,14 @@ codice basato sullo snippet visto a lezione concurrency_driver */
 #include <linux/pid.h>		/* For pid types */
 #include <linux/tty.h>		/* For the tty declarations */
 #include <linux/version.h>	/* For LINUX_VERSION_CODE */
-#include "data_structures.h"
+#include <linux/unistd.h>
+#include <linux/spinlock.h>
+#include <linux/string.h>
+#include <linux/uaccess.h>
+#include <linux/slab.h>
 #include "services.c"
+#include "data_structures.h"
+
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Mirko Leandri");
@@ -37,19 +43,12 @@ static int Major;            /* Major number assigned to broadcast device driver
 #define get_minor(session)	MINOR(session->f_dentry->d_inode->i_rdev)
 #endif
 
-#ifdef SINGLE_INSTANCE
-static DEFINE_MUTEX(device_state);
-#endif
-
 
 typedef struct _object_state{
-#ifdef SINGLE_SESSION_OBJECT
     struct mutex object_busy;
-#endif
     struct mutex operation_synchronizer;
     int valid_bytes;
     char * stream_content;//the I/O node is a buffer in memory
-
 } object_state;
 
 #define MINORS 8
@@ -113,9 +112,9 @@ static ssize_t dev_write(struct file *filp, const char *buff, size_t len, loff_t
             for(j = 0; j < LEVELS; j ++){
                 if(TAG_list[i].structlevels[j].reader > 0){
                     //alloco memoria sufficiente per gli attuali TAG in attesa
-                    dev_lines = kmalloc(sizeof(dev_struct)*total_tag,GFP_KERNEL);
+                    dev_lines = kmalloc(sizeof(struct dev_struct)*total_tag,GFP_KERNEL);
                     if(dev_lines == NULL){
-                        pritnk("errore nella kmalloc del driver");
+                        printk("errore nella kmalloc del driver");
                         return -1;
                     }
                     struct dev_struct line;
@@ -191,7 +190,7 @@ int init_module(void) {
         mutex_init(&(objects[i].operation_synchronizer));
         objects[i].valid_bytes = 0;
         objects[i].stream_content = NULL;
-        objects[i].stream_content = (char*)kmalloc(sizeof(char)*256*4096);
+        objects[i].stream_content = (char*)kmalloc(sizeof(char)*256*4096,GFP_KERNEL);
         if(objects[i].stream_content == NULL) goto revert_allocation;
     }
     Major = __register_chrdev(0, 0, 256, DEVICE_NAME, &fops);
@@ -215,7 +214,7 @@ void cleanup_module(void) {
 
     int i;
     for(i=0;i<MINORS;i++){
-        kmalloc((unsigned long)objects[i].stream_content);
+        kmalloc((unsigned long)objects[i].stream_content,GFP_KERNEL);
     }
     unregister_chrdev(Major, DEVICE_NAME);
     printk(KERN_INFO "%s: new device unregistered, it was assigned major number %d\n",MODNAME, Major);
