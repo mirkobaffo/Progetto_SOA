@@ -58,6 +58,7 @@ int tag_get(int key, int command, int permission){
             level_list = kmalloc(sizeof(struct level) * LEVELS, GFP_KERNEL);
             if (level_list == NULL) {
                 printk("errore nell'assegnazione dell'area di memoria dedicata ai livelli per il tag: %d", i);
+                spin_unlock(&tag_lock);
                 return -1;
             }
             int lvl;
@@ -66,12 +67,15 @@ int tag_get(int key, int command, int permission){
                 level_list[lvl].tag = key;
                 level_list[lvl].lvl = lvl;
                 level_list[lvl].is_empty = 0;
+                wait_queue_head_t wq;
+                level_list[lvl].wq = wq;
             }
             TAG_list[key].structlevels = level_list;
             spin_unlock(&tag_lock);
             printk("ho inserito i livelli: %d", lvl);
         }
         else {
+            printk("%d", TAG_list[key].exist);
             printk("il tag selezionato gia esiste\n");
             return -1;
         }
@@ -89,7 +93,7 @@ int tag_get(int key, int command, int permission){
                 printk("questo tag è stato creato come IPC_PRIVATE e non può essere riaperto\n");
                 return -1;
             }
-            if(TAG_list[key].permission == permission || TAG_list[key].permission == 0) {
+            else if(TAG_list[key].permission == permission || TAG_list[key].permission == 0) {
                 TAG_list[key].opened = 1;
                 return key;
             }
@@ -134,6 +138,7 @@ int tag_send(int tag, int level, char *buffer, size_t size){
             return -1;
         }
         TAG_list[tag].structlevels[level].is_empty = 1;
+        wake_up_interruptible(&TAG_list[tag].structlevels[level].wq);
     }
     spin_unlock(&lock);
     return 0;
@@ -146,7 +151,15 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         TAG_list[tag].structlevels[level].reader ++;
         TAG_list[tag].structlevels[level].is_queued = 1;
         spin_unlock(&level_lock);
-        wait = wait_event_interruptible(TAG_list[tag].structlevels[level].wq, TAG_list[tag].structlevels[level].is_empty == 0 || signal_on == 1);
+        printk("ho preso il lock e mi metto in attesa");
+        //wait = 0;
+
+        int ctl = 0;
+        if (TAG_list[tag].structlevels[level].is_empty != 0 || signal_on == 1){
+            ctl = 1;
+        }
+        printk("ctl %d", ctl);
+        wait = wait_event_interruptible_timeout(TAG_list[tag].structlevels[level].wq, ctl == 1, 10);
         if(wait < 0){
             printk("errore nella wait_event_interruptible\n");
             return -1;
@@ -159,6 +172,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         }
         signal_on = 0;
         if(wait == 0){
+            printk("questo per l'attesa, vuoto: %d signal: %d", TAG_list[tag].structlevels[level].is_empty, signal_on);
             printk("il thread %d è stato messo in attesa di messaggi\n", current);
             //Qua mettere sincro della RCU
             rcu_read_lock();
@@ -213,6 +227,7 @@ int tag_ctl(int tag, int command) {
         }
     }
     else if (command == 2){
+        printk("sto entrando nella remove dei tag");
         if(tag < 0 || tag > MAX_TAG_NUMBER){
             printk("purtroppo il valore del tag %d inserito non è valido \n", tag);
             return -1;
@@ -223,7 +238,8 @@ int tag_ctl(int tag, int command) {
         }
         //ricordiamoci di segnare che il livello è vuoto dopo la receive
         if(search_for_level(TAG_list[tag])){
-            delete_tag(TAG_list[tag]);
+            TAG_list[tag] = delete_tag(TAG_list[tag]);
+            printk("questo l'exist del tag %d dopo la remove: %d",tag, TAG_list[tag].exist);
         }
         else{
             printk("non si può chiudere il tag\n");
@@ -231,11 +247,6 @@ int tag_ctl(int tag, int command) {
     }
     return 0;
 
-}
-
-
-void handler(int signal){
-    signal_on = 1;
 }
 
 
