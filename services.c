@@ -67,13 +67,13 @@ int tag_get(int key, int command, int permission){
                 level_list[lvl].tag = key;
                 level_list[lvl].lvl = lvl;
                 level_list[lvl].is_empty = 0;
-                level_list[lvl]->wq = (wait_queue_head_t *) kmalloc(sizeof(wait_queue_head_t), GFP_ATOMIC);
-                if(level_list[lvl]-> wq == NULL) {
+                level_list[lvl].wq = (wait_queue_head_t *) kmalloc(sizeof(wait_queue_head_t), GFP_ATOMIC);
+                if(level_list[lvl].wq == NULL) {
                     printk(KERN_ERR "Unable to allocate new wait queue for replacement\n");
-                    kfree(level_list[lvl]->wq);
+                    kfree(level_list[lvl].wq);
                     return -ENOMEM;
                 }
-                init_waitqueue_head(level_list[lvl]->wq);
+                init_waitqueue_head(level_list[lvl].wq);
             }
             TAG_list[key].structlevels = level_list;
             spin_unlock(&tag_lock);
@@ -136,6 +136,7 @@ int tag_send(int tag, int level, char *buffer, size_t size){
         spin_unlock(&lock);
         return -3;
     }
+    printk("prima della copy_to_user\n");
     ret = copy_from_user(TAG_list[tag].structlevels[level].bufs, buffer, size);
     if(ret < 0){
         printk("errore nella copy from user");
@@ -160,7 +161,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         printk("prima sync");
         __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
         printk("dopo sync sync");
-        wait = wait_event_interruptible_timeout(*TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty != 0 || signal_on == 1, 100);
+        wait = wait_event_interruptible_timeout(*TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty == 0 || signal_on == 1, 100);
         if(wait < 0){
             printk("errore nella wait_event_interruptible\n");
             return -1;

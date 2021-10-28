@@ -347,7 +347,7 @@ int main(int argc, char *argv[]){
     //printf("Eseguo il test del device driver.\n");
     //test_device_driver();
     //TODO controllo della lista se vuota
-    //remove_for_test();
+    remove_for_test();
     printf("Eseguo il test multithread.\n");
     test_create_multithread();
     return 0;
