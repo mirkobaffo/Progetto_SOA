@@ -144,7 +144,7 @@ int tag_send(int tag, int level, char *buffer, size_t size){
     }
     TAG_list[tag].structlevels[level].is_empty = 1;
     printk("prima della wake up");
-    wake_up_interruptible(TAG_list[tag].structlevels[level].wq);
+    //wake_up_interruptible(TAG_list[tag].structlevels[level].wq);
     printk("dopo la wake up");
     spin_unlock(&lock);
     return 0;
