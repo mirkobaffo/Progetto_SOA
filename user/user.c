@@ -28,12 +28,12 @@ int tag_get(int key, int command, int permission){
 
 //Frontend della tag_send
 int tag_send(int tag, int level, char *buffer, size_t size){
-    return syscall(174, tag, level, buffer, size);
+    return syscall(174, tag, level, *buffer, size);
 }
 
 //Frontend della tag_receive
 int tag_receive(int tag, int level, char *buffer, size_t size){
-    return syscall(182, tag, level, buffer, size);
+    return syscall(182, tag, level, *buffer, size);
 }
 
 //Frontend della tag_ctl
@@ -267,7 +267,7 @@ int test_sending_message(int tag, int level, int tid){
     printf("ho copiato il messaggio, ora invio\n");
     ret = tag_send(tag,level,send_buf,MSG_MAX_SIZE);
     if(ret < 0){
-        printf("errore nella tag_send\n");
+        printf("errore nella tag_send: %d\n", ret);
         return -1;
     }
     return 0;
@@ -313,10 +313,12 @@ void test_create_multithread(){
     int tid = (int)pthread_self();
     printf("sono il thread %d e sto continuando l'esecuzione\n", tid);
     printf("WAITING...\n");
-    sleep(5);
+    sleep(8);
     printf("ora invio il messaggio\n");
     test_sending_message(1,1,0);
     printf("inviato\n");
+    printf("WAITING...\n\n\n");
+    sleep(10);
     //pthread_exit(NULL);
     return 0;
 }

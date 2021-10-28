@@ -32,7 +32,7 @@ struct level{
     int tag;
     int is_empty;
     int is_queued;
-    wait_queue_head_t wq;
+    wait_queue_head_t *wq;
     int reader;
 };
 
