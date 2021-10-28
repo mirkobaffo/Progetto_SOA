@@ -11,7 +11,7 @@
 #define REMOVE 2
 #define CREATE 1
 #define OPEN 2
-#define NUM_THREADS 5
+#define NUM_THREADS 2
 #define RAND_MAX 32
 #define MAJOR 0
 #define MINOR 4
@@ -257,15 +257,19 @@ int test_delete_and_open(int tag, int tid){
 
 int test_sending_message(int tag, int level, int tid){
     char *send_buf;
+    int ret;
     send_buf = malloc(MSG_MAX_SIZE);
     if(send_buf == NULL){
         printf("errore nella malloc della test_sending_message");
         return -1;
     }
-    send_buf = sprintf(send_buf,"messaggio di prova del thread %d al livello %d del tag %d", tid, level, tag);
-    int ret;
-    printf("ho copiato il messaggio, ora invio\n");
-    ret = tag_send(tag,level,send_buf,MSG_MAX_SIZE);
+    ret = sprintf(send_buf,"messaggio di prova del thread %d al livello %d del tag %d", tid, level, tag);
+    if(ret < 0){
+        printf("errore nella sprintf della sendbuf\n");
+        return -1;
+    }
+    printf("ho copiato il messaggio, ora invio %d bytes\n", sizeof(send_buf));
+    ret = tag_send(tag,level,send_buf,sizeof(send_buf));
     if(ret < 0){
         printf("errore nella tag_send: %d\n", ret);
         return -1;
