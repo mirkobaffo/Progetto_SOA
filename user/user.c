@@ -218,7 +218,7 @@ int test_waiting_for_message(int key){
     printf("sto per entrare nella receive, sono il tag: %d\n", key);
     sleep(2);
     ret = tag_receive(key, level, return_buff, MSG_MAX_SIZE);
-    if(ret<0){
+    if(ret!=0){
         printf("errore nella tag receive, ret:%d\n", ret);
         return -1;
     }

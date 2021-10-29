@@ -129,22 +129,32 @@ int tag_send(int tag, int level, char *buffer, size_t size){
         printk("il servizio di tag è chiuso\n");
         return -2;
     }
-    spin_lock(&lock);
     int ret;
     if(TAG_list[tag].structlevels[level].reader < 1){
         printk("nessuno aspetta il messaggio nel livello %d, del tag %d, il messaggio è stato scartato", level,tag);
-        spin_unlock(&lock);
         return -3;
     }
+    printk("prima della spin_lock");
+    spin_lock(&lock);
     printk("prima della copy_to_user\n");
-    ret = copy_from_user(TAG_list[tag].structlevels[level].bufs, buffer, size);
+    char *buf;
+    buf = kmalloc(sizeof(char)*10, GFP_KERNEL);
+    if(buf == NULL){
+        printk("malloc merda");
+        spin_unlock(&lock);
+        return -41;
+    }
+    buf = "ciao mamma";
+    ret = copy_from_user((char*)buf,(char*)buffer, sizeof(char)*10);
+    printk("dopo copy to user il buffer: %s", *buf);
     if(ret < 0){
+        spin_unlock(&lock);
         printk("errore nella copy from user");
         return -4;
     }
     TAG_list[tag].structlevels[level].is_empty = 1;
-    printk("prima della wake up");
-    //wake_up_interruptible(TAG_list[tag].structlevels[level].wq);
+    printk("prima della wake up mmmmm");
+    wake_up_interruptible(TAG_list[tag].structlevels[level].wq);
     printk("dopo la wake up");
     spin_unlock(&lock);
     return 0;
@@ -161,7 +171,10 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         printk("prima sync");
         __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
         printk("dopo sync sync");
-        wait = wait_event_interruptible_timeout(*TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty == 0 || signal_on == 1, 100);
+        printk("is_empty: %d", TAG_list[tag].structlevels[level].is_empty);
+        printk("reader: %d", TAG_list[tag].structlevels[level].reader);
+        printk("wq: %d", TAG_list[tag].structlevels[level].wq);
+        wait = wait_event_interruptible_timeout(*TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty == 1, 10);
         if(wait < 0){
             printk("errore nella wait_event_interruptible\n");
             return -1;
@@ -188,7 +201,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
             int ret;
             printk("prima della copy to user");
             ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].bufs,min(size,MSG_MAX_SIZE));
-            printk("dopo copy to user");
+            printk("dopo copy to user il buffer: %s", buffer);
             if(ret < 0){
                 rcu_read_unlock();
                 printk("errore nella copy to user");
@@ -209,7 +222,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         }
     //da capire come ipmlementare un thread in attesa di un messaggio
     //bisogna usare il device driver che ci dice quali thread devono aspettare
-    return 0;
+    return wait;
 }
 
 int tag_ctl(int tag, int command) {
