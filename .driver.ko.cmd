@@ -1,1 +1,0 @@
-cmd_/home/mirko/Progetto_SOA/driver.ko := ld -r -m elf_x86_64 --build-id=sha1  -T scripts/module.lds -o /home/mirko/Progetto_SOA/driver.ko /home/mirko/Progetto_SOA/driver.o /home/mirko/Progetto_SOA/driver.mod.o;  true
