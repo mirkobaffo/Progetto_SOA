@@ -10,7 +10,7 @@ int search_for_level(struct tag TAG_list){
     int i;
     int j;
     for(j = 0; j < LEVELS; j ++) {
-        if (TAG_list.structlevels[j].is_empty){
+        if (TAG_list.structlevels[j].is_empty == 0){
             continue;
         }
         else{

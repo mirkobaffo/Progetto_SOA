@@ -317,6 +317,7 @@ void cleanup_module(void) {
         printk("resetto la entry della syscall table numero %d", THIRD_NI_SYSCALL);
         hacked_syscall_tbl[FOURTH_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
         printk("resetto la entry della syscall table numero %d", FOURTH_NI_SYSCALL);
+        printk("libero la memoria delle strutture");
         protect_memory();
 
 #else

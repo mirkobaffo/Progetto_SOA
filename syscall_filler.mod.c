@@ -34,7 +34,7 @@ __used __section("__versions") = {
 	{ 0x6b10bee1, "_copy_to_user" },
 	{ 0x88db9f48, "__check_object_size" },
 	{ 0x92540fbf, "finish_wait" },
-	{ 0x8ddd8aad, "schedule_timeout" },
+	{ 0x1000e51, "schedule" },
 	{ 0x8c26d495, "prepare_to_wait_event" },
 	{ 0xfe487975, "init_wait_entry" },
 	{ 0xa1c76e0a, "_cond_resched" },
@@ -55,4 +55,4 @@ __used __section("__versions") = {
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "B13F524D12BB2B9008CF3FC");
+MODULE_INFO(srcversion, "0A9C5E9C78BCEF0AF1937FF");

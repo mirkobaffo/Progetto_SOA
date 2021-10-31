@@ -6,6 +6,7 @@
 #include <time.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define AWAKE_ALL 1
 #define REMOVE 2
@@ -82,6 +83,28 @@ void test_create_open_remove_tag(){
         printf("Rimosso correttamente il tag con key 100.\n");
 }
 
+void * the_thread(void* path){
+    char* device;
+    int fd, ret;
+    char mess[MSG_MAX_SIZE];
+    device = (char*) path;
+    fd = open(device, O_RDWR);
+    if(fd < 0) {
+        printf("Error opening device %s\n",device);
+        pthread_exit(EXIT_SUCCESS);
+    }
+    fprintf(stdout, "device %s aperto\n",device);
+    size_t len = MSG_MAX_SIZE;
+    ret = read(fd,mess,len);
+    if (ret < 0)
+        printf("Errore nella read del device driver\n");
+    else
+        printf(stdout, "Questo è presente nel tag attualmente \n%s\n", mess);
+    close(fd);
+    pthread_exit(EXIT_SUCCESS);
+}
+
+
 void test_device_driver(){
     char *path = "/dev/driver";
     char buff[MSG_MAX_SIZE];
@@ -120,7 +143,8 @@ void test_device_driver(){
     sprintf(buff,"rm  %s*\n",path);
     system(buff);
     printf("Esecuzione terminata\n");
-}
+} 
+
 
 int test_waiting_for_message(int key){
     //genero un numero random da 1 a 32 per il livello
@@ -161,7 +185,7 @@ int test_delete_and_open(int tag, int tid){
     int ctl;
     ret = tag_get(tag,OPEN,tid);
     if(ret < 0){
-        printf("il tag che stai cercadno di aprire per il test delete and open non esiste");
+        printf("il tag che stai cercando di aprire per il test delete and open non esiste\n");
         return -1;
     }
     ctl = tag_ctl(ret, REMOVE);
@@ -171,7 +195,7 @@ int test_delete_and_open(int tag, int tid){
     }
     ret = tag_get(tag,OPEN,tid);
     if(ret < 0){
-        printf("il risultato è atteso, per verificare meglio usare il comando seguente:\n sudo dmesg");
+        printf("il risultato è atteso, per verificare meglio usare il comando seguente:\n sudo dmesg\n");
         return 0;
     }
     return 0;
@@ -182,10 +206,10 @@ int test_sending_message(int tag, int level, int tid){
     int ret;
     send_buf = malloc(MSG_MAX_SIZE);
     if(send_buf == NULL){
-        printf("errore nella malloc della test_sending_message");
+        printf("errore nella malloc della test_sending_message\n");
         return -1;
     }
-    ret = sprintf(send_buf,"messaggio di prova del thread %d al livello %d del tag %d", tid, level, tag);
+    ret = sprintf(send_buf,"messaggio di prova del thread %d al livello %d del tag %d\n", tid, level, tag);
     if(ret < 0){
         printf("errore nella sprintf della sendbuf\n");
         return -1;
@@ -196,6 +220,7 @@ int test_sending_message(int tag, int level, int tid){
         printf("errore nella tag_send: %d\n", ret);
         return -1;
     }
+    tag_ctl(0,1);
     return 0;
 }
 
@@ -209,23 +234,21 @@ int test_multithread(void *i){
     sleep(1);
     ret = tag_get(i, 1, int_tid);
     if(ret < 0){
-        printf("errore nella creazione del tag %d", i);
+        printf("errore nella creazione del tag %d\n", i);
         return -1;
     }
     if(i <3){
         printf("creato il tag con key = %d\n", ret);
         ret = test_waiting_for_message(ret);
         if(ret< 0){
-            printf("errore nella test_waiting_for_message");
+            printf("errore nella test_waiting_for_message\n");
             return -1;
         }
     }
     else{
-        printf("sto per inviare");
-        sleep(5);
+        sleep(i+1);
         test_sending_message(1,1,0);
-        printf("inviato\n");
-        printf("WAITING...\n\n\n");
+        printf("terminata l'esecuzione di test_sending_message\n");
         sleep(1);
     }
     
@@ -248,7 +271,7 @@ void test_create_multithread(){
         }
     }
     for(i=0; i < NUM_THREADS; i++){
-        printf("sono il threads %d la posizione è: %d", pthread_self, i);
+        printf("sono il threads %d la posizione è: %d\n", pthread_self, i);
         rc=pthread_join(threads[i], (void**)&status);
         printf("Completed join with thread%d status= %d\n",i, status);
     }
@@ -267,17 +290,13 @@ int remove_for_test(){
     return 0;
 }
 int main(int argc, char *argv[]){
-    //printf("Eseguo i test di creazione e rimozione dei tag.\n");
-    //test_create_open_remove_tag();
-    //printf("Eseguo i test di lettura e scrittura dei tag.\n");
-    //test_write_read();
+    printf("Eseguo i test di creazione e rimozione dei tag.\n");
+    test_create_open_remove_tag();
     //remove_for_test();
     //printf("Eseguo il test del device driver.\n");
     //test_device_driver();
-    //TODO controllo della lista se vuota
-    //remove_for_test();
     printf("Eseguo il test multithread.\n");
-    test_create_multithread();
+    //test_create_multithread();
     return 0;
 }
 

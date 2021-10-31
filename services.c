@@ -30,6 +30,7 @@ int total_tag = 0;
 int tag_get(int key, int command, int permission){
     //Controllo se è gia istanziata quell'area di memoria, se è la prima volta che chiamo questa call o se è stata fatta gia la free, verrà reistanziata
     if(TAG_list == NULL) {
+        //libero questa memoria nella syscall filler allo smontaggio del modulo
         TAG_list = kmalloc(sizeof(struct tag) * MAX_TAG_NUMBER, GFP_KERNEL);
         if (TAG_list == NULL) {
             printk("errore nell'assegnazione dell'area di memoria dedicata ai tag");
@@ -56,6 +57,7 @@ int tag_get(int key, int command, int permission){
             total_tag = total_tag + 1;
             printk("Hai creato un nuovo tag nella posizione %d", key);
             //ora creo la serie di livelli associati al tag di riferimento
+            //libero questa memoria nella syscall filler allo smontaggio del modulo
             level_list = kmalloc(sizeof(struct level) * LEVELS, GFP_KERNEL);
             if (level_list == NULL) {
                 printk("errore nell'assegnazione dell'area di memoria dedicata ai livelli per il tag: %d", i);
@@ -158,8 +160,10 @@ int tag_send(int tag, int level, char *buffer, size_t size){
 
 int tag_receive(int tag, int level, char *buffer, size_t size) {
     int wait;
+    printk("ci sono");
+    __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
     spin_lock(&receive_lock);
-    printk("SEND, questo il buff per controllare se è NULL: %s",TAG_list[tag].structlevels[level].bufs);
+    printk("RECEIVE, questo il buff per controllare se è NULL: %s",TAG_list[tag].structlevels[level].bufs);
     if(TAG_list[tag].structlevels[level].bufs == NULL){
         TAG_list[tag].structlevels[level].bufs = kmalloc(MSG_MAX_SIZE,GFP_KERNEL);
         if(TAG_list[tag].structlevels[level].bufs== NULL){
@@ -170,9 +174,8 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
     }
     spin_unlock(&receive_lock);
     //aumento il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
-    __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
-    printk("is_empty: %d, reader: %d", TAG_list[tag].structlevels[level].is_empty, TAG_list[tag].structlevels[level].reader);
-    wait = wait_event_interruptible_timeout(TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty != 0,700);
+    printk("RECEIVE: is_empty: %d, reader: %d", TAG_list[tag].structlevels[level].is_empty, TAG_list[tag].structlevels[level].reader);
+    wait = wait_event_interruptible(TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty != 0);
     if(wait < 0){
         printk("errore nella wait_event_interruptible\n");
         return -1;
@@ -214,14 +217,13 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         }
         rcu_read_unlock();
     }
-    //da capire come ipmlementare un thread in attesa di un messaggio
-    //bisogna usare il device driver che ci dice quali thread devono aspettare
     return wait;
 }
 
 int tag_ctl(int tag, int command) {
     if(command == 1){
         char *s;
+        //libero a riga 243
         s = kmalloc(sizeof(char) * 17,GFP_KERNEL);
         if(s == NULL){
             printk("errore nella kmalloc dell'awake_all");
@@ -240,9 +242,14 @@ int tag_ctl(int tag, int command) {
                 }
             }
         }
+        kfree(s);
     }
     else if (command == 2){
         printk("sto entrando nella remove dei tag");
+        if(TAG_list==NULL){
+            printk("non esiste ancora la lista di tag");
+            return -1;
+        }
         if(tag < 0 || tag > MAX_TAG_NUMBER){
             printk("purtroppo il valore del tag %d inserito non è valido \n", tag);
             return -1;

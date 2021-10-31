@@ -31,7 +31,7 @@ __used __section("__versions") = {
 	{ 0x977f511b, "__mutex_init" },
 	{ 0x2d5f69b3, "rcu_read_unlock_strict" },
 	{ 0x92540fbf, "finish_wait" },
-	{ 0x8ddd8aad, "schedule_timeout" },
+	{ 0x1000e51, "schedule" },
 	{ 0x8c26d495, "prepare_to_wait_event" },
 	{ 0xfe487975, "init_wait_entry" },
 	{ 0xa1c76e0a, "_cond_resched" },
