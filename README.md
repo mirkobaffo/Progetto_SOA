@@ -1,5 +1,7 @@
 # Progetto_SOA
 
+la relazione del progetto è presente nella cartella "relazione"
+
 per montare il modulo e caricarlo mandare il comando --make e successivamente --make mount
 
 per rimuovere il modulo --make remove

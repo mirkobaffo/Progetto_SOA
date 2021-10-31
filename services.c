@@ -160,8 +160,8 @@ int tag_send(int tag, int level, char *buffer, size_t size){
 
 int tag_receive(int tag, int level, char *buffer, size_t size) {
     int wait;
-    printk("ci sono");
     __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
+    __sync_fetch_and_add(&TAG_list[tag].structlevels[level].is_queued,1);
     spin_lock(&receive_lock);
     printk("RECEIVE, questo il buff per controllare se è NULL: %s",TAG_list[tag].structlevels[level].bufs);
     if(TAG_list[tag].structlevels[level].bufs == NULL){
@@ -236,6 +236,7 @@ int tag_ctl(int tag, int command) {
                 for(j = 0; j < LEVELS; j++){
                     if(TAG_list[i].structlevels[j].is_queued = 1){
                         *TAG_list[i].structlevels[j].bufs = s;
+                        __sync_fetch_and_add(&TAG_list[i].structlevels[j].is_empty,1);
                         //awake all
                         wake_up_interruptible(&TAG_list[i].structlevels[j].wq);
                     }
