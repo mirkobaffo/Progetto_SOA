@@ -22,14 +22,12 @@
 
 //Frontend della tag_get
 int tag_get(int key, int command, int permission){
-    printf("interno della tag_get()");
     return syscall(134, key, command, permission);
 }
 
 //Frontend della tag_send
 int tag_send(int tag, int level, char *buffer, size_t size){
     int ret;
-    printf("buffer poco prima della tag send: %s", buffer);
     ret = syscall(174, tag, level, buffer, size);
     if(ret < 0){
         printf("errore nella syscall: %d\n", ret);
@@ -82,89 +80,6 @@ void test_create_open_remove_tag(){
     ret = tag_ctl(100, REMOVE);
     if (ret == 0)
         printf("Rimosso correttamente il tag con key 100.\n");
-}
-
-void test_write_read(){
-    /*
-     * Test di scrittua rifiutata (1)
-     * Test di scrittua accettata (2)
-     * Test di risveglio dei thread e inviare un messaggio e riceverlo (3)
-     */
-
-    int ret;
-
-    // scrivere su tag che non stanno leggendo (1)
-    char msg = "Ciao mamma ti voglio bene";
-    int lenMsg = strlen(msg);
-    for (int i=0; i<5; i++){
-        ret = tag_send(i, 3,msg, lenMsg);
-        printf("Ho perso correttamente il messaggio sul tag con key: %d; "
-               "non c'è nessuno in attesa di riceverlo.\n", msg, ret);
-    }
-
-    // scrivere su tag che stanno leggendo (2)
-    // alloco lo spazio per il buffer su cui ricevo il messaggio
-    char *s_test2 = malloc(256);
-    int lenS_test2 = strlen(s_test2);
-    if(s_test2 == NULL){
-        fprintf(stderr, "Errore nella malloc.\n");
-        return 1;
-    }
-    // creo un tag su cui voglio ricevere il messaggio
-    ret = tag_get(1, 1, 0);
-    printf("Creato correttamente il tag con key: %d.\n", ret);
-    // mi metto in attesa di ricevere il messaggio
-    tag_receive(1,1,s_test2,lenS_test2);
-    printf("Sono in attesa di ricevere un messaggio sul tag con key: %d.\n", ret);
-    // invio il messaggio sul tag aperto
-    ret = tag_send(1, 1,msg, lenMsg);
-    if (s_test2 == msg)
-        printf("Ho inviato correttamente il messaggio sul tag con key: %d.\n", msg, ret);
-
-    // TODO --> rifare il test rendendolo multithread
-    // risveglio tutti i tag e invio un messaggio (3)
-    // alloco lo spazio per il buffer su cui ricevo il messaggio
-   /* char *s_test3 = malloc(256);
-    int lenS_test3 = strlen(s_test3);
-    if(s_test3 == NULL){
-        fprintf(stderr, "Errore nella malloc.\n");
-        return 1;
-    }
-    // addormento il tag 1
-    tag_receive(1, 1, s_test3, lenS_test3);
-    // risveglio il tag 1
-    // TODO --> errore serve un thread che lo risveglia
-    ret = tag_ctl(1, AWAKE_ALL);
-    printf("Risvegliati tutti i thread, %d.\n", ret);
-    // invio il messaggio sul tag risvegliato
-    char msg = "Ciao mamma mi sono svegliato";
-    int lenMsg = strlen(msg);
-    ret = tag_send(1, 1,msg, lenMsg);
-    printf("Ho ricevuto correttamente il messaggio sul tag con key: %d.\n", msg, ret);
-
-    if (s_test3 == msg):
-    printf("Ho inviato correttamente il messaggio sul tag con key: %d.\n", msg, ret); */
-}
-
-void * the_thread(void* path){
-    char* device;
-    int fd, ret;
-    char mess[MSG_MAX_SIZE];
-    device = (char*) path;
-    fd = open(device, O_RDWR);
-    if(fd < 0) {
-        printf("Error opening device %s\n",device);
-        pthread_exit(EXIT_SUCCESS);
-    }
-    fprintf(stdout, "device %s aperto\n",device);
-    size_t len = MSG_MAX_SIZE;
-    ret = read(fd,mess,len);
-    if (ret < 0)
-        printf("Errore nella read del device driver\n");
-    else
-        printf(stdout, "Questo è presente nel tag attualmente \n%s\n", mess);
-    close(fd);
-    pthread_exit(EXIT_SUCCESS);
 }
 
 void test_device_driver(){
@@ -307,7 +222,7 @@ int test_multithread(void *i){
     }
     else{
         printf("sto per inviare");
-        sleep(4);
+        sleep(5);
         test_sending_message(1,1,0);
         printf("inviato\n");
         printf("WAITING...\n\n\n");
@@ -333,6 +248,7 @@ void test_create_multithread(){
         }
     }
     for(i=0; i < NUM_THREADS; i++){
+        printf("sono il threads %d la posizione è: %d", pthread_self, i);
         rc=pthread_join(threads[i], (void**)&status);
         printf("Completed join with thread%d status= %d\n",i, status);
     }

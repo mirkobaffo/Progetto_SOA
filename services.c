@@ -22,6 +22,7 @@ struct level *level_list = NULL;
 spinlock_t lock;
 spinlock_t level_lock;
 spinlock_t tag_lock;
+spinlock_t receive_lock;
 int signal_on = 0;
 //poteva essermi utile tenere la conta dei tag aperti per migliorare le prestazioni sul driver
 int total_tag = 0;
@@ -119,136 +120,100 @@ int tag_get(int key, int command, int permission){
 
 
 int tag_send(int tag, int level, char *buffer, size_t size){
-    printk("prima della malloc tag_send\n");
-    TAG_list[tag].structlevels[level].bufs = kmalloc(MSG_MAX_SIZE,GFP_KERNEL);
-    if(TAG_list[tag].structlevels[level].bufs== NULL){
-        printk("errore nella kmalloc");
+    int ret;
+    printk("questo è il tag: %d", tag);
+    if(tag < 0 || tag > MAX_TAG_NUMBER){
+        printk("purtroppo il valore del tag %d inserito non è valido \n", tag);
         return -1;
     }
-    int ret;
+    if(TAG_list[tag].exist != 1){
+        printk("il tag inserito non esiste, send\n");
+        return -1;
+    }
+    if(TAG_list[tag].opened != 1){
+        printk("il servizio di tag è chiuso\n");
+        return -1;
+    }
+    if(TAG_list[tag].structlevels[level].reader < 1){
+        printk("nessuno aspetta il messaggio nel livello %d, del tag %d, il messaggio è stato scartato", level,tag);
+        return -1;
+    }
+    spin_lock(&lock);    
     printk("SEND: questo è il buffer prima della copy from user: %s", buffer);
     ret = copy_from_user(TAG_list[tag].structlevels[level].bufs,buffer, 10*sizeof(char));
-    printk("SEND: dopo copy to user il buffer: %s", TAG_list[tag].structlevels[level].bufs);
+    printk("SEND: dopo la copy from user il buffer del tag %d è: %s",tag, TAG_list[tag].structlevels[level].bufs);
     if(ret < 0){
         printk("errore nella copy from user");
         return -1;
     }
+    printk("SEND: tolgo il lucchetto, ho finito di scrivere");
+    spin_unlock(&lock);
     printk("SEND: questo il buffer dopo la copia: %s", TAG_list[tag].structlevels[level].bufs);
     __sync_fetch_and_add(&TAG_list[tag].structlevels[level].is_empty,1);
-    //printk("SEND: prima della wake up mmmmm");
-    //wake_up_interruptible(&(TAG_list[tag].structlevels[level].wq));
-    //TAG_list[tag].structlevels[level].is_empty = 1;
-    printk("SEND: dopo la wake up");
+    wake_up_interruptible(&(TAG_list[tag].structlevels[level].wq));
     return 0;
 }
 
 
 
-/*int tag_send(int tag, int level, char *buffer, size_t size){
-    printk("questo è il tag: %d", tag);
-    if(tag < 0 || tag > MAX_TAG_NUMBER){
-        printk("purtroppo il valore del tag %d inserito non è valido \n", tag);
-        return -10;
-    }
-    if(TAG_list[tag].exist != 1){
-        printk("il tag inserito non esiste, send\n");
-        return -11;
-    }
-    if(TAG_list[tag].opened != 1){
-        printk("il servizio di tag è chiuso\n");
-        return -2;
-    }
-    int ret;
-    if(TAG_list[tag].structlevels[level].reader < 1){
-        printk("nessuno aspetta il messaggio nel livello %d, del tag %d, il messaggio è stato scartato", level,tag);
-        return -3;
-    }
-    printk("prima della spin_lock");
-    spin_lock(&lock);
-    printk("prima della copy_to_user\n");
-    char *buf;
-    buf = kmalloc(sizeof(char)*10, GFP_KERNEL);
-    if(buf == NULL){
-        printk("malloc merda");
-        spin_unlock(&lock);
-        return -41;
-    }
-    buf = "ciao mamma";
-    ret = copy_from_user((char*)buf,(char*)buffer, sizeof(char)*10);
-    printk("dopo copy to user il buffer: %s", *buf);
-    if(ret < 0){
-        spin_unlock(&lock);
-        printk("errore nella copy from user");
-        return -4;
-    }
-    TAG_list[tag].structlevels[level].is_empty = 1;
-    printk("prima della wake up mmmmm");
-    wake_up_interruptible(TAG_list[tag].structlevels[level].wq);
-    printk("dopo la wake up");
-    spin_unlock(&lock);
-    return 0;
-}*/
-
 int tag_receive(int tag, int level, char *buffer, size_t size) {
-        int wait;
-        //aumento il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
-        //spin_lock(&level_lock);
-        TAG_list[tag].structlevels[level].is_queued = 1;
-        //spin_unlock(&level_lock);
-        printk("ho preso il lock e mi metto in attesa");
-        //wait = 0;
-        printk("prima sync");
-        __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
-        printk("dopo sync sync");
-        printk("is_empty: %d", TAG_list[tag].structlevels[level].is_empty);
-        printk("reader: %d", TAG_list[tag].structlevels[level].reader);
-        printk("wq: %d", TAG_list[tag].structlevels[level].wq);
-        wait = wait_event_interruptible_timeout(TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty != 0,700);
-        if(wait < 0){
-            printk("errore nella wait_event_interruptible\n");
+    int wait;
+    spin_lock(&receive_lock);
+    printk("SEND, questo il buff per controllare se è NULL: %s",TAG_list[tag].structlevels[level].bufs);
+    if(TAG_list[tag].structlevels[level].bufs == NULL){
+        TAG_list[tag].structlevels[level].bufs = kmalloc(MSG_MAX_SIZE,GFP_KERNEL);
+        if(TAG_list[tag].structlevels[level].bufs== NULL){
+            printk("errore nella kmalloc");
+            spin_unlock(&receive_lock);
             return -1;
         }
-        if(wait == -ERESTARTSYS){
-            printk("Ricevuto un segnale, fallito nell'attesa del messaggio\n");
-            TAG_list[tag].structlevels[level].reader --;
-            TAG_list[tag].structlevels[level].is_queued = 0;
-            return -1;
+    }
+    spin_unlock(&receive_lock);
+    //aumento il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
+    __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,1);
+    printk("is_empty: %d, reader: %d", TAG_list[tag].structlevels[level].is_empty, TAG_list[tag].structlevels[level].reader);
+    wait = wait_event_interruptible_timeout(TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty != 0,700);
+    if(wait < 0){
+        printk("errore nella wait_event_interruptible\n");
+        return -1;
+    }
+    if(wait == -ERESTARTSYS){
+        printk("Ricevuto un segnale, fallito nell'attesa del messaggio\n");
+        TAG_list[tag].structlevels[level].reader --;
+        return -1;
+    }
+    signal_on = 0;
+    wait = 0;
+    if(wait == 0){
+        //sincro della RCU
+        rcu_read_lock();
+        //diminuisco il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
+        __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,-1);
+        int ret;
+        if(buffer,TAG_list[tag].structlevels[level].bufs == NULL){
+            printk("il buffer di lettura è vuoto");
+            goto here;
         }
-        signal_on = 0;
-        wait = 0;
-        if(wait == 0){
-            printk("questo per l'attesa, vuoto: %d signal: %d", TAG_list[tag].structlevels[level].is_empty, signal_on);
-            printk("il thread %d è stato messo in attesa di messaggi\n", current);
-            //Qua mettere sincro della RCU
-            rcu_read_lock();
-            //diminuisco il contatore dei lettori di 1 per ogni chiamata relativa a quel livello di quel tag
-            printk("pre seconda sync");
-            __sync_fetch_and_add(&TAG_list[tag].structlevels[level].reader,-1);
-            printk("post seconda sync");
-            spin_lock(&level_lock);
-            TAG_list[tag].structlevels[level].is_queued = 0;
-            spin_unlock(&level_lock);
-            int ret;
-            printk("prima della copy to user");
-            printk("prima della copy to user il buffer di tag: %d level: %d: %s",tag, level, TAG_list[tag].structlevels[level].bufs);
-            ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].bufs,min(size,MSG_MAX_SIZE));
-            printk("dopo copy to user il buffer: %s", buffer);
-            if(ret < 0){
-                rcu_read_unlock();
-                printk("errore nella copy to user");
-                return -1;
-            }
-            //reinserisco il buf del livello come vuoto
-            TAG_list[tag].structlevels[level].is_empty = 0;
-            if(TAG_list[tag].structlevels[level].reader < 1){
-                //cancello il messaggio dopo che tutti lo hanno letto
-                kfree(TAG_list[tag].structlevels[level].bufs);
-                printk("dopo kfree");
-                *TAG_list[tag].structlevels[level].bufs = NULL;
-                printk("dopo il puntatore messo a null");
-            }
+        printk("prima della copy to user il buffer di tag: %d level: %d: %s",tag, level, TAG_list[tag].structlevels[level].bufs);
+        ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].bufs,min(size,MSG_MAX_SIZE));
+        printk("questo il buffer dopo la copy_to_user: %s", buffer);
+        if(ret < 0){
             rcu_read_unlock();
+            printk("errore nella copy to user");
+            return -1;
         }
+        here:
+        //decremento il contatore che sblocca le wait
+        __sync_fetch_and_add(&TAG_list[tag].structlevels[level].is_empty,-1);
+        if(TAG_list[tag].structlevels[level].reader < 1){
+            //cancello il messaggio dopo che tutti lo hanno letto
+            kfree(TAG_list[tag].structlevels[level].bufs);
+            printk("eseguita la kfree del buffer appartente al tag: %d del livello: %d", tag,level);
+            *TAG_list[tag].structlevels[level].bufs = NULL;
+            printk("Metto il puntatore del buffer a NULL");
+        }
+        rcu_read_unlock();
+    }
     //da capire come ipmlementare un thread in attesa di un messaggio
     //bisogna usare il device driver che ci dice quali thread devono aspettare
     return wait;

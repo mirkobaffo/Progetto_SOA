@@ -1,1 +1,0 @@
-cmd_/home/mirko/Progetto_SOA/syscall_filler.ko := ld -r -m elf_x86_64 --build-id=sha1  -T scripts/module.lds -o /home/mirko/Progetto_SOA/syscall_filler.ko /home/mirko/Progetto_SOA/syscall_filler.o /home/mirko/Progetto_SOA/syscall_filler.mod.o;  true
