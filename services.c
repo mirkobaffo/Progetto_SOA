@@ -67,13 +67,15 @@ int tag_get(int key, int command, int permission){
                 level_list[lvl].tag = key;
                 level_list[lvl].lvl = lvl;
                 level_list[lvl].is_empty = 0;
-                level_list[lvl].wq = (wait_queue_head_t *) kmalloc(sizeof(wait_queue_head_t), GFP_ATOMIC);
-                if(level_list[lvl].wq == NULL) {
+                wait_queue_head_t wq;
+                init_waitqueue_head(&wq);
+                level_list[lvl].wq = wq;
+                /*if(level_list[lvl].wq == NULL) {
                     printk(KERN_ERR "Unable to allocate new wait queue for replacement\n");
                     kfree(level_list[lvl].wq);
                     return -ENOMEM;
-                }
-                init_waitqueue_head(level_list[lvl].wq);
+                }*/
+                
             }
             TAG_list[key].structlevels = level_list;
             spin_unlock(&tag_lock);
@@ -115,7 +117,34 @@ int tag_get(int key, int command, int permission){
     return 0;
 }
 
+
 int tag_send(int tag, int level, char *buffer, size_t size){
+    printk("prima della malloc tag_send\n");
+    TAG_list[tag].structlevels[level].bufs = kmalloc(MSG_MAX_SIZE,GFP_KERNEL);
+    if(TAG_list[tag].structlevels[level].bufs== NULL){
+        printk("errore nella kmalloc");
+        return -1;
+    }
+    int ret;
+    printk("SEND: questo è il buffer prima della copy from user: %s", buffer);
+    ret = copy_from_user(TAG_list[tag].structlevels[level].bufs,buffer, 10*sizeof(char));
+    printk("SEND: dopo copy to user il buffer: %s", TAG_list[tag].structlevels[level].bufs);
+    if(ret < 0){
+        printk("errore nella copy from user");
+        return -1;
+    }
+    printk("SEND: questo il buffer dopo la copia: %s", TAG_list[tag].structlevels[level].bufs);
+    __sync_fetch_and_add(&TAG_list[tag].structlevels[level].is_empty,1);
+    //printk("SEND: prima della wake up mmmmm");
+    //wake_up_interruptible(&(TAG_list[tag].structlevels[level].wq));
+    //TAG_list[tag].structlevels[level].is_empty = 1;
+    printk("SEND: dopo la wake up");
+    return 0;
+}
+
+
+
+/*int tag_send(int tag, int level, char *buffer, size_t size){
     printk("questo è il tag: %d", tag);
     if(tag < 0 || tag > MAX_TAG_NUMBER){
         printk("purtroppo il valore del tag %d inserito non è valido \n", tag);
@@ -158,7 +187,7 @@ int tag_send(int tag, int level, char *buffer, size_t size){
     printk("dopo la wake up");
     spin_unlock(&lock);
     return 0;
-}
+}*/
 
 int tag_receive(int tag, int level, char *buffer, size_t size) {
         int wait;
@@ -174,7 +203,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
         printk("is_empty: %d", TAG_list[tag].structlevels[level].is_empty);
         printk("reader: %d", TAG_list[tag].structlevels[level].reader);
         printk("wq: %d", TAG_list[tag].structlevels[level].wq);
-        wait = wait_event_interruptible_timeout(*TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty == 1, 10);
+        wait = wait_event_interruptible_timeout(TAG_list[tag].structlevels[level].wq,TAG_list[tag].structlevels[level].is_empty != 0,700);
         if(wait < 0){
             printk("errore nella wait_event_interruptible\n");
             return -1;
@@ -186,6 +215,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
             return -1;
         }
         signal_on = 0;
+        wait = 0;
         if(wait == 0){
             printk("questo per l'attesa, vuoto: %d signal: %d", TAG_list[tag].structlevels[level].is_empty, signal_on);
             printk("il thread %d è stato messo in attesa di messaggi\n", current);
@@ -200,6 +230,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
             spin_unlock(&level_lock);
             int ret;
             printk("prima della copy to user");
+            printk("prima della copy to user il buffer di tag: %d level: %d: %s",tag, level, TAG_list[tag].structlevels[level].bufs);
             ret = copy_to_user(buffer,TAG_list[tag].structlevels[level].bufs,min(size,MSG_MAX_SIZE));
             printk("dopo copy to user il buffer: %s", buffer);
             if(ret < 0){
@@ -208,9 +239,7 @@ int tag_receive(int tag, int level, char *buffer, size_t size) {
                 return -1;
             }
             //reinserisco il buf del livello come vuoto
-            spin_lock(&level_lock);
             TAG_list[tag].structlevels[level].is_empty = 0;
-            spin_unlock(&level_lock);
             if(TAG_list[tag].structlevels[level].reader < 1){
                 //cancello il messaggio dopo che tutti lo hanno letto
                 kfree(TAG_list[tag].structlevels[level].bufs);
@@ -241,7 +270,7 @@ int tag_ctl(int tag, int command) {
                     if(TAG_list[i].structlevels[j].is_queued = 1){
                         *TAG_list[i].structlevels[j].bufs = s;
                         //awake all
-                        wake_up_interruptible(TAG_list[i].structlevels[j].wq);
+                        wake_up_interruptible(&TAG_list[i].structlevels[j].wq);
                     }
                 }
             }

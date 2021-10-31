@@ -1,2 +1,2 @@
-/home/mirko/Scrivania/Progetto_SOA/driver.o
+/home/mirko/Progetto_SOA/driver.o
 

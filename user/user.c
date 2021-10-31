@@ -11,7 +11,7 @@
 #define REMOVE 2
 #define CREATE 1
 #define OPEN 2
-#define NUM_THREADS 2
+#define NUM_THREADS 5
 #define RAND_MAX 32
 #define MAJOR 0
 #define MINOR 4
@@ -28,12 +28,19 @@ int tag_get(int key, int command, int permission){
 
 //Frontend della tag_send
 int tag_send(int tag, int level, char *buffer, size_t size){
-    return syscall(174, tag, level, *buffer, size);
+    int ret;
+    printf("buffer poco prima della tag send: %s", buffer);
+    ret = syscall(174, tag, level, buffer, size);
+    if(ret < 0){
+        printf("errore nella syscall: %d\n", ret);
+        return ret;
+    }
+    return ret;
 }
 
 //Frontend della tag_receive
 int tag_receive(int tag, int level, char *buffer, size_t size){
-    return syscall(182, tag, level, *buffer, size);
+    return syscall(182, tag, level, buffer, size);
 }
 
 //Frontend della tag_ctl
@@ -202,7 +209,7 @@ void test_device_driver(){
 
 int test_waiting_for_message(int key){
     //genero un numero random da 1 a 32 per il livello
-    int level=key;
+    int level=1;
     char *return_buff;
     return_buff = malloc(MSG_MAX_SIZE);
     sleep(2);
@@ -218,7 +225,7 @@ int test_waiting_for_message(int key){
     printf("sto per entrare nella receive, sono il tag: %d\n", key);
     sleep(2);
     ret = tag_receive(key, level, return_buff, MSG_MAX_SIZE);
-    if(ret!=0){
+    if(ret<0){
         printf("errore nella tag receive, ret:%d\n", ret);
         return -1;
     }
@@ -268,7 +275,7 @@ int test_sending_message(int tag, int level, int tid){
         printf("errore nella sprintf della sendbuf\n");
         return -1;
     }
-    printf("ho copiato il messaggio, ora invio %d bytes\n", sizeof(send_buf));
+    printf("ho copiato il messaggio, ora invio %d bytes il messaggio è: %s\n", sizeof(send_buf), send_buf);
     ret = tag_send(tag,level,send_buf,sizeof(send_buf));
     if(ret < 0){
         printf("errore nella tag_send: %d\n", ret);
@@ -283,28 +290,39 @@ int test_multithread(void *i){
     int int_tid = (int) tid;
     int ret;
     //apertura del tag
-    printf("sto per aprire i tag\n");
+    printf("sto per aprire il tag: %d\n", i);
     sleep(1);
     ret = tag_get(i, 1, int_tid);
     if(ret < 0){
         printf("errore nella creazione del tag %d", i);
         return -1;
     }
-    printf("creato il tag con key = %d\n", ret);
-    ret = test_waiting_for_message(ret);
-    if(ret< 0){
-        printf("errore nella test_waiting_for_message");
-        return -1;
+    if(i <3){
+        printf("creato il tag con key = %d\n", ret);
+        ret = test_waiting_for_message(ret);
+        if(ret< 0){
+            printf("errore nella test_waiting_for_message");
+            return -1;
+        }
     }
-
-
+    else{
+        printf("sto per inviare");
+        sleep(4);
+        test_sending_message(1,1,0);
+        printf("inviato\n");
+        printf("WAITING...\n\n\n");
+        sleep(1);
+    }
+    
 }
 
 
 
 void test_create_multithread(){
     int i;
+    int x;
     int rc;
+    int status;
     pthread_t threads[NUM_THREADS];
     printf("sto per creare i thread\n");
     for( i = 0; i < NUM_THREADS; i++ ) {
@@ -314,16 +332,10 @@ void test_create_multithread(){
             return -1;
         }
     }
-    int tid = (int)pthread_self();
-    printf("sono il thread %d e sto continuando l'esecuzione\n", tid);
-    printf("WAITING...\n");
-    sleep(8);
-    printf("ora invio il messaggio\n");
-    test_sending_message(1,1,0);
-    printf("inviato\n");
-    printf("WAITING...\n\n\n");
-    sleep(10);
-    //pthread_exit(NULL);
+    for(i=0; i < NUM_THREADS; i++){
+        rc=pthread_join(threads[i], (void**)&status);
+        printf("Completed join with thread%d status= %d\n",i, status);
+    }
     return 0;
 }
 

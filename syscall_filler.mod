@@ -1,2 +1,2 @@
-/home/mirko/Scrivania/Progetto_SOA/syscall_filler.o
+/home/mirko/Progetto_SOA/syscall_filler.o
 

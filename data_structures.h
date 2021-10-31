@@ -25,14 +25,14 @@ struct tag{
 
 
 struct level{
-    char bufs[MSG_MAX_SIZE];
+    char *bufs;
     //descrittore univoco con il livello specifico
     int lvl;
     //descrittore univoco con il TAG proprietario del livello
     int tag;
     int is_empty;
     int is_queued;
-    wait_queue_head_t *wq;
+    wait_queue_head_t wq;
     int reader;
 };
 
